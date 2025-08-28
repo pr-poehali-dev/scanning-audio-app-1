@@ -3,37 +3,98 @@ import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
+import { Badge } from '@/components/ui/badge'
 import Icon from '@/components/ui/icon'
 
 const Index = () => {
   const [activeTab, setActiveTab] = useState('delivery')
   const [phoneNumber, setPhoneNumber] = useState('')
   const [scannedCode, setScannedCode] = useState('')
+  const [audioFiles, setAudioFiles] = useState<{[key: string]: string}>({})
+  const [isAudioSetupOpen, setIsAudioSetupOpen] = useState(false)
   const audioRef = useRef<HTMLAudioElement>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   // Система озвучки
-  const playAudio = (message: string) => {
-    // Здесь будет логика воспроизведения аудио из облака
-    const utterance = new SpeechSynthesisUtterance(message)
-    utterance.lang = 'ru-RU'
-    speechSynthesis.speak(utterance)
+  const playAudio = (audioKey: string, fallbackMessage: string) => {
+    if (audioFiles[audioKey]) {
+      const audio = new Audio(audioFiles[audioKey])
+      audio.play().catch(() => {
+        // Fallback на синтез речи если аудио не удалось воспроизвести
+        const utterance = new SpeechSynthesisUtterance(fallbackMessage)
+        utterance.lang = 'ru-RU'
+        speechSynthesis.speak(utterance)
+      })
+    } else {
+      // Используем синтез речи как fallback
+      const utterance = new SpeechSynthesisUtterance(fallbackMessage)
+      utterance.lang = 'ru-RU'
+      speechSynthesis.speak(utterance)
+    }
   }
 
+  // Загрузка папки с аудиофайлами
+  const handleAudioFolderUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = event.target.files
+    if (!files) return
+
+    const newAudioFiles: {[key: string]: string} = {}
+    
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i]
+      if (file.type.startsWith('audio/')) {
+        const url = URL.createObjectURL(file)
+        const fileName = file.name.toLowerCase().replace(/\.(mp3|wav|ogg|m4a)$/, '')
+        
+        // Автоматическое сопоставление по названию файла
+        if (fileName.includes('scan') || fileName.includes('сканирование')) {
+          newAudioFiles['scan'] = url
+        } else if (fileName.includes('check') || fileName.includes('проверьте')) {
+          newAudioFiles['check'] = url
+        } else if (fileName.includes('rate') || fileName.includes('оцените')) {
+          newAudioFiles['rate'] = url
+        } else if (fileName.includes('accept') || fileName.includes('принят')) {
+          newAudioFiles['accept'] = url
+        } else if (fileName.includes('return') || fileName.includes('возврат')) {
+          newAudioFiles['return'] = url
+        } else if (fileName.includes('search') || fileName.includes('поиск')) {
+          newAudioFiles['search'] = url
+        } else {
+          // Используем название файла как ключ
+          newAudioFiles[fileName] = url
+        }
+      }
+    }
+    
+    setAudioFiles(prev => ({ ...prev, ...newAudioFiles }))
+  }
+
+  // Предопределенные аудио-ключи и их описания
+  const audioMappings = [
+    { key: 'scan', description: 'Сканирование QR-кода', message: 'товары со скидкой проверьте вб кошелек' },
+    { key: 'check', description: 'Проверка товара', message: 'Проверьте товар под камерой' },
+    { key: 'rate', description: 'Оценка сервиса', message: 'оцените наш пункт выдачи в приложении' },
+    { key: 'accept', description: 'Приемка товара', message: 'Товар принят в систему' },
+    { key: 'return', description: 'Возврат товара', message: 'Возврат оформлен' },
+    { key: 'search', description: 'Поиск клиента', message: 'Поиск клиента по номеру' }
+  ]
+
   const handleScan = () => {
-    playAudio('товары со скидкой проверьте вб кошелек')
+    playAudio('scan', 'товары со скидкой проверьте вб кошелек')
     setTimeout(() => {
-      playAudio('Проверьте товар под камерой')
+      playAudio('check', 'Проверьте товар под камерой')
     }, 2000)
   }
 
   const handlePhoneSearch = () => {
     if (phoneNumber.length === 4) {
-      playAudio(`Поиск клиента с номером ${phoneNumber}`)
+      playAudio('search', `Поиск клиента с номером ${phoneNumber}`)
     }
   }
 
   const handleIssueComplete = () => {
-    playAudio('оцените наш пункт выдачи в приложении')
+    playAudio('rate', 'оцените наш пункт выдачи в приложении')
   }
 
   return (
@@ -56,6 +117,87 @@ const Index = () => {
           </div>
           <Icon name="Search" size={20} className="text-gray-500" />
           <Icon name="MessageCircle" size={20} className="text-gray-500" />
+          <Dialog open={isAudioSetupOpen} onOpenChange={setIsAudioSetupOpen}>
+            <DialogTrigger asChild>
+              <Button variant="outline" size="sm" className="text-xs">
+                <Icon name="Volume2" size={16} className="mr-1" />
+                Озвучка
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-md">
+              <DialogHeader>
+                <DialogTitle>Настройка озвучки</DialogTitle>
+              </DialogHeader>
+              
+              <div className="space-y-4">
+                <div className="text-sm text-gray-600">
+                  Загрузите папку с аудиофайлами для озвучки функций
+                </div>
+                
+                <input
+                  type="file"
+                  ref={fileInputRef}
+                  multiple
+                  accept="audio/*"
+                  onChange={handleAudioFolderUpload}
+                  className="hidden"
+                  webkitdirectory=""
+                  directory=""
+                />
+                
+                <Button 
+                  onClick={() => fileInputRef.current?.click()}
+                  className="w-full"
+                  variant="outline"
+                >
+                  <Icon name="FolderOpen" size={16} className="mr-2" />
+                  Выбрать папку с аудиофайлами
+                </Button>
+                
+                <div className="space-y-2">
+                  <h4 className="text-sm font-medium">Загруженные аудиофайлы:</h4>
+                  <div className="space-y-2 max-h-40 overflow-y-auto">
+                    {audioMappings.map((mapping) => (
+                      <div key={mapping.key} className="flex items-center justify-between p-2 border rounded">
+                        <div className="flex-1">
+                          <div className="text-sm font-medium">{mapping.description}</div>
+                          <div className="text-xs text-gray-500">{mapping.message}</div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Badge variant={audioFiles[mapping.key] ? 'default' : 'secondary'}>
+                            {audioFiles[mapping.key] ? 'Загружено' : 'Нет файла'}
+                          </Badge>
+                          {audioFiles[mapping.key] && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => {
+                                const audio = new Audio(audioFiles[mapping.key])
+                                audio.play()
+                              }}
+                            >
+                              <Icon name="Play" size={14} />
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                
+                <div className="text-xs text-gray-500">
+                  <p><strong>Совет:</strong> Назовите файлы по ключевым словам:</p>
+                  <ul className="list-disc list-inside mt-1 space-y-1">
+                    <li>scan.mp3 - для сканирования</li>
+                    <li>check.mp3 - для проверки товара</li>
+                    <li>rate.mp3 - для оценки сервиса</li>
+                    <li>accept.mp3 - для приемки</li>
+                    <li>return.mp3 - для возврата</li>
+                  </ul>
+                </div>
+              </div>
+            </DialogContent>
+          </Dialog>
           <Button className="bg-green-600 hover:bg-green-700 text-white text-sm">
             Установить версию
           </Button>
@@ -184,7 +326,7 @@ const Index = () => {
               </div>
 
               <Button 
-                onClick={() => playAudio('Товар принят в систему')}
+                onClick={() => playAudio('accept', 'Товар принят в систему')}
                 className="w-full bg-green-600 hover:bg-green-700 text-white"
               >
                 Сканировать для приемки
@@ -226,7 +368,7 @@ const Index = () => {
               </div>
 
               <Button 
-                onClick={() => playAudio('Возврат оформлен')}
+                onClick={() => playAudio('return', 'Возврат оформлен')}
                 className="w-full bg-orange-600 hover:bg-orange-700 text-white"
               >
                 Сканировать для возврата
