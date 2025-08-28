@@ -113,14 +113,6 @@ const Index = () => {
   // Генерация случайного номера ячейки для демонстрации
   const generateRandomCell = () => Math.floor(Math.random() * 482) + 1
 
-  // Озвучка номера ячейки
-  const playCellAudio = (cellNumber: number) => {
-    const cellKey = `cell_${cellNumber}`
-    if (audioFiles[cellKey]) {
-      playAudio(cellKey)
-    }
-  }
-
   const handleScan = () => {
     // Генерируем случайный номер ячейки
     const cellNumber = generateRandomCell()
