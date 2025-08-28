@@ -42,20 +42,27 @@ const Index = () => {
 
   // Система озвучки - только загруженные файлы
   const playAudio = (audioKey: string) => {
+    console.log('Попытка воспроизведения:', audioKey)
+    console.log('Доступные файлы:', Object.keys(audioFiles))
+    
     if (audioFiles[audioKey]) {
+      console.log('Файл найден, воспроизводим:', audioFiles[audioKey])
       const audio = new Audio(audioFiles[audioKey])
-      audio.play().catch((error) => {
-        console.error('Ошибка воспроизведения аудио:', error)
-      })
+      audio.play()
+        .then(() => console.log('Аудио успешно воспроизведено'))
+        .catch((error) => {
+          console.error('Ошибка воспроизведения аудио:', error)
+        })
+    } else {
+      console.warn('Аудиофайл не найден для ключа:', audioKey)
     }
   }
 
   // Озвучка номера ячейки
   const playCellAudio = (cellNumber: number) => {
     const cellKey = `cell_${cellNumber}`
-    if (audioFiles[cellKey]) {
-      playAudio(cellKey)
-    }
+    console.log('Попытка озвучки ячейки:', cellNumber, 'ключ:', cellKey)
+    playAudio(cellKey)
   }
 
   // Загрузка папки с аудиофайлами
@@ -354,16 +361,45 @@ const Index = () => {
                   </div>
                 </div>
 
+                {/* Кнопка тестирования последовательности */}
+                <div className="border-t pt-3">
+                  <Button 
+                    onClick={() => {
+                      // Тестируем последовательность как при сканировании
+                      const testCell = 15 // тестовая ячейка
+                      console.log('Тест последовательности озвучки')
+                      
+                      // 1. Озвучка ячейки
+                      playCellAudio(testCell)
+                      
+                      // 2. Через 1.5 сек - scan
+                      setTimeout(() => playAudio('scan'), 1500)
+                      
+                      // 3. Через 4 сек - check  
+                      setTimeout(() => playAudio('check'), 4000)
+                      
+                      // 4. Через 6 сек - rate
+                      setTimeout(() => playAudio('rate'), 6000)
+                    }}
+                    className="w-full"
+                    variant="outline"
+                  >
+                    <Icon name="TestTube" size={16} className="mr-2" />
+                    Тестировать последовательность озвучки
+                  </Button>
+                </div>
+
                 <div className="text-xs text-gray-500 border-t pt-3">
                   <p><strong>Совет:</strong> Назовите файлы по ключевым словам:</p>
                   <ul className="list-disc list-inside mt-1 space-y-1">
-                    <li>scan.mp3 - для сканирования</li>
-                    <li>check.mp3 - для проверки товара</li>
-                    <li>rate.mp3 - для оценки сервиса</li>
+                    <li>scan.mp3 - "товары со скидкой проверьте вб кошелек"</li>
+                    <li>check.mp3 - "Проверьте товар под камерой"</li>
+                    <li>rate.mp3 - "оцените наш пункт выдачи в приложении"</li>
                     <li>accept.mp3 - для приемки</li>
                     <li>return.mp3 - для возврата</li>
                     <li>1.mp3, 2.mp3... - для номеров ячеек</li>
                   </ul>
+                  <p className="mt-2 text-purple-600"><strong>Последовательность:</strong> Ячейка → Скидки → Проверка → Оценка</p>
                 </div>
               </div>
             </DialogContent>
