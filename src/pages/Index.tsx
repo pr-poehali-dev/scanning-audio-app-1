@@ -14,8 +14,11 @@ const Index = () => {
   const [audioFiles, setAudioFiles] = useState<{[key: string]: string}>({})
   const [isAudioSetupOpen, setIsAudioSetupOpen] = useState(false)
   const [currentCell, setCurrentCell] = useState<number | null>(null)
+  const [cellUploadMode, setCellUploadMode] = useState(false)
+  const [selectedCellNumber, setSelectedCellNumber] = useState<number>(1)
   const audioRef = useRef<HTMLAudioElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const cellFileInputRef = useRef<HTMLInputElement>(null)
 
   // Загрузка настроек из localStorage
   useEffect(() => {
@@ -112,6 +115,41 @@ const Index = () => {
 
   // Генерация случайного номера ячейки для демонстрации
   const generateRandomCell = () => Math.floor(Math.random() * 482) + 1
+
+  // Загрузка аудиофайла для конкретной ячейки
+  const handleCellAudioUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = event.target.files
+    if (!files || files.length === 0) return
+
+    const file = files[0]
+    if (file.type.startsWith('audio/')) {
+      const url = URL.createObjectURL(file)
+      const cellKey = `cell_${selectedCellNumber}`
+      
+      setAudioFiles(prev => ({
+        ...prev,
+        [cellKey]: url
+      }))
+    }
+    
+    // Очистка input для возможности повторной загрузки того же файла
+    if (cellFileInputRef.current) {
+      cellFileInputRef.current.value = ''
+    }
+  }
+
+  // Получение количества загруженных ячеек
+  const getLoadedCellsCount = () => {
+    return Object.keys(audioFiles).filter(key => key.startsWith('cell_')).length
+  }
+
+  // Получение списка загруженных ячеек
+  const getLoadedCells = () => {
+    return Object.keys(audioFiles)
+      .filter(key => key.startsWith('cell_'))
+      .map(key => parseInt(key.replace('cell_', '')))
+      .sort((a, b) => a - b)
+  }
 
   const handleScan = () => {
     // Генерируем случайный номер ячейки
@@ -236,7 +274,87 @@ const Index = () => {
                   </div>
                 </div>
                 
-                <div className="text-xs text-gray-500">
+                {/* Раздел управления ячейками */}
+                <div className="border-t pt-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <h4 className="text-sm font-medium">Озвучка ячеек (1-482)</h4>
+                    <Badge variant="outline">
+                      Загружено: {getLoadedCellsCount()} из 482
+                    </Badge>
+                  </div>
+                  
+                  <div className="space-y-3">
+                    <div className="flex gap-2">
+                      <Input
+                        type="number"
+                        min="1"
+                        max="482"
+                        value={selectedCellNumber}
+                        onChange={(e) => setSelectedCellNumber(parseInt(e.target.value) || 1)}
+                        placeholder="Номер ячейки"
+                        className="w-32"
+                      />
+                      
+                      <input
+                        type="file"
+                        ref={cellFileInputRef}
+                        accept="audio/*"
+                        onChange={handleCellAudioUpload}
+                        className="hidden"
+                      />
+                      
+                      <Button 
+                        onClick={() => cellFileInputRef.current?.click()}
+                        variant="outline"
+                        className="flex-1"
+                      >
+                        <Icon name="Upload" size={16} className="mr-2" />
+                        Загрузить для ячейки {selectedCellNumber}
+                      </Button>
+                      
+                      {audioFiles[`cell_${selectedCellNumber}`] && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => {
+                            const audio = new Audio(audioFiles[`cell_${selectedCellNumber}`])
+                            audio.play()
+                          }}
+                        >
+                          <Icon name="Play" size={16} />
+                        </Button>
+                      )}
+                    </div>
+                    
+                    {getLoadedCells().length > 0 && (
+                      <div>
+                        <div className="text-xs text-gray-600 mb-2">Загруженные ячейки:</div>
+                        <div className="flex flex-wrap gap-1 max-h-20 overflow-y-auto">
+                          {getLoadedCells().slice(0, 20).map(cellNum => (
+                            <Badge 
+                              key={cellNum} 
+                              variant="secondary" 
+                              className="text-xs cursor-pointer hover:bg-purple-100"
+                              onClick={() => {
+                                const audio = new Audio(audioFiles[`cell_${cellNum}`])
+                                audio.play()
+                              }}
+                            >
+                              {cellNum}
+                            </Badge>
+                          ))}
+                          {getLoadedCells().length > 20 && (
+                            <Badge variant="outline" className="text-xs">
+                              +{getLoadedCells().length - 20}
+                            </Badge>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="text-xs text-gray-500 border-t pt-3">
                   <p><strong>Совет:</strong> Назовите файлы по ключевым словам:</p>
                   <ul className="list-disc list-inside mt-1 space-y-1">
                     <li>scan.mp3 - для сканирования</li>
@@ -244,6 +362,7 @@ const Index = () => {
                     <li>rate.mp3 - для оценки сервиса</li>
                     <li>accept.mp3 - для приемки</li>
                     <li>return.mp3 - для возврата</li>
+                    <li>1.mp3, 2.mp3... - для номеров ячеек</li>
                   </ul>
                 </div>
               </div>
