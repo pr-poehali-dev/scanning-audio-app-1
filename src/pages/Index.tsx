@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -13,24 +13,45 @@ const Index = () => {
   const [scannedCode, setScannedCode] = useState('')
   const [audioFiles, setAudioFiles] = useState<{[key: string]: string}>({})
   const [isAudioSetupOpen, setIsAudioSetupOpen] = useState(false)
+  const [currentCell, setCurrentCell] = useState<number | null>(null)
   const audioRef = useRef<HTMLAudioElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  // Система озвучки
-  const playAudio = (audioKey: string, fallbackMessage: string) => {
+  // Загрузка настроек из localStorage
+  useEffect(() => {
+    const savedAudioFiles = localStorage.getItem('wb-audio-files')
+    if (savedAudioFiles) {
+      try {
+        const parsed = JSON.parse(savedAudioFiles)
+        setAudioFiles(parsed)
+      } catch (error) {
+        console.error('Ошибка загрузки аудио настроек:', error)
+      }
+    }
+  }, [])
+
+  // Сохранение настроек в localStorage
+  useEffect(() => {
+    if (Object.keys(audioFiles).length > 0) {
+      localStorage.setItem('wb-audio-files', JSON.stringify(audioFiles))
+    }
+  }, [audioFiles])
+
+  // Система озвучки - только загруженные файлы
+  const playAudio = (audioKey: string) => {
     if (audioFiles[audioKey]) {
       const audio = new Audio(audioFiles[audioKey])
-      audio.play().catch(() => {
-        // Fallback на синтез речи если аудио не удалось воспроизвести
-        const utterance = new SpeechSynthesisUtterance(fallbackMessage)
-        utterance.lang = 'ru-RU'
-        speechSynthesis.speak(utterance)
+      audio.play().catch((error) => {
+        console.error('Ошибка воспроизведения аудио:', error)
       })
-    } else {
-      // Используем синтез речи как fallback
-      const utterance = new SpeechSynthesisUtterance(fallbackMessage)
-      utterance.lang = 'ru-RU'
-      speechSynthesis.speak(utterance)
+    }
+  }
+
+  // Озвучка номера ячейки
+  const playCellAudio = (cellNumber: number) => {
+    const cellKey = `cell_${cellNumber}`
+    if (audioFiles[cellKey]) {
+      playAudio(cellKey)
     }
   }
 
@@ -60,6 +81,15 @@ const Index = () => {
           newAudioFiles['return'] = url
         } else if (fileName.includes('search') || fileName.includes('поиск')) {
           newAudioFiles['search'] = url
+        } else if (fileName.match(/^(cell_|ячейка_)?\d+$/)) {
+          // Файлы ячеек: cell_1.mp3, ячейка_1.mp3, или просто 1.mp3
+          const cellMatch = fileName.match(/(\d+)/)
+          if (cellMatch) {
+            const cellNumber = parseInt(cellMatch[1])
+            if (cellNumber >= 1 && cellNumber <= 482) {
+              newAudioFiles[`cell_${cellNumber}`] = url
+            }
+          }
         } else {
           // Используем название файла как ключ
           newAudioFiles[fileName] = url
@@ -72,7 +102,7 @@ const Index = () => {
 
   // Предопределенные аудио-ключи и их описания
   const audioMappings = [
-    { key: 'scan', description: 'Сканирование QR-кода', message: 'товары со скидкой проверьте вб кошелек' },
+    { key: 'scan', description: 'Сканирование QR-кода + ячейка', message: 'Озвучивает номер ячейки и "товары со скидкой проверьте вб кошелек"' },
     { key: 'check', description: 'Проверка товара', message: 'Проверьте товар под камерой' },
     { key: 'rate', description: 'Оценка сервиса', message: 'оцените наш пункт выдачи в приложении' },
     { key: 'accept', description: 'Приемка товара', message: 'Товар принят в систему' },
@@ -80,21 +110,50 @@ const Index = () => {
     { key: 'search', description: 'Поиск клиента', message: 'Поиск клиента по номеру' }
   ]
 
+  // Генерация случайного номера ячейки для демонстрации
+  const generateRandomCell = () => Math.floor(Math.random() * 482) + 1
+
+  // Озвучка номера ячейки
+  const playCellAudio = (cellNumber: number) => {
+    const cellKey = `cell_${cellNumber}`
+    if (audioFiles[cellKey]) {
+      playAudio(cellKey)
+    }
+  }
+
   const handleScan = () => {
-    playAudio('scan', 'товары со скидкой проверьте вб кошелек')
+    // Генерируем случайный номер ячейки
+    const cellNumber = generateRandomCell()
+    setCurrentCell(cellNumber)
+    
+    // Сначала озвучиваем номер ячейки
+    playCellAudio(cellNumber)
+    
+    // Через небольшую паузу озвучиваем сообщение о скидках
     setTimeout(() => {
-      playAudio('check', 'Проверьте товар под камерой')
-    }, 2000)
+      playAudio('scan')
+    }, 1500)
+    
+    // После сканирования товара со склада - озвучиваем проверку
+    setTimeout(() => {
+      playAudio('check')
+    }, 4000)
   }
 
   const handlePhoneSearch = () => {
     if (phoneNumber.length === 4) {
-      playAudio('search', `Поиск клиента с номером ${phoneNumber}`)
+      playAudio('search')
+      // Генерируем ячейку для найденного клиента
+      const cellNumber = generateRandomCell()
+      setCurrentCell(cellNumber)
+      setTimeout(() => {
+        playCellAudio(cellNumber)
+      }, 1500)
     }
   }
 
   const handleIssueComplete = () => {
-    playAudio('rate', 'оцените наш пункт выдачи в приложении')
+    playAudio('rate')
   }
 
   return (
@@ -244,6 +303,13 @@ const Index = () => {
               <h2 className="text-lg font-medium text-gray-700 mb-6">
                 Отсканируйте QR-код клиента или курьера
               </h2>
+              
+              {currentCell && (
+                <div className="mb-4 p-3 bg-purple-50 rounded-lg border-2 border-purple-200">
+                  <div className="text-lg font-bold text-purple-700">Ячейка №{currentCell}</div>
+                  <div className="text-sm text-purple-600">Текущий заказ</div>
+                </div>
+              )}
               
               <div className="mb-6">
                 <img 
